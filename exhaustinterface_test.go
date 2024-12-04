@@ -11,5 +11,10 @@ import (
 // TestAnalyzer is a test for Analyzer.
 func TestAnalyzer(t *testing.T) {
 	testdata := testutil.WithModules(t, analysistest.TestData(), nil)
-	analysistest.Run(t, testdata, exhaustinterface.Analyzer, "a")
+	t.Logf("testdata: %v", testdata)
+	// t.Log("test `a` directory")
+	// analysistest.Run(t, testdata, exhaustinterface.Analyzer, "a/...")
+
+	t.Log("test `calc` directory")
+	analysistest.Run(t, testdata, exhaustinterface.Analyzer, "calc/...")
 }

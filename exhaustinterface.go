@@ -21,10 +21,19 @@ var SealedInterfaceFinder = &analysis.Analyzer{
 		inspect.Analyzer,
 	},
 	ResultType: reflect.TypeOf([]*types.Interface{}),
+	FactTypes:  []analysis.Fact{new(SealedInterfaces)},
 }
 
+type SealedInterfaces struct {
+	Interfaces []*types.Interface
+}
+
+func (*SealedInterfaces) AFact() {}
+
+var _ analysis.Fact = (*SealedInterfaces)(nil)
+
 func findSealedInterfaces(pass *analysis.Pass) (any, error) {
-	log.Printf("START findSealedInterfaces")
+	log.Printf("START findSealedInterfaces %v", pass.Pkg.Path())
 	inspect := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
 
 	sealedInterfaces := make([]*types.Interface, 0)
@@ -51,6 +60,16 @@ func findSealedInterfaces(pass *analysis.Pass) (any, error) {
 		}
 	})
 
+	pass.ExportPackageFact(&SealedInterfaces{Interfaces: sealedInterfaces})
+
+	// add imported sealed interfaces
+	for _, imp := range pass.Pkg.Imports() {
+		var importedFact SealedInterfaces
+		if pass.ImportPackageFact(imp, &importedFact) {
+			sealedInterfaces = append(sealedInterfaces, importedFact.Interfaces...)
+		}
+	}
+
 	return sealedInterfaces, nil
 }
 
@@ -63,10 +82,17 @@ var SealedInstanceFinder = &analysis.Analyzer{
 		SealedInterfaceFinder,
 	},
 	ResultType: reflect.TypeOf(make(map[*types.Interface][]types.Type)),
+	FactTypes:  []analysis.Fact{new(SealedInstances)},
 }
 
+type SealedInstances struct {
+	Instances map[*types.Interface][]types.Type
+}
+
+func (*SealedInstances) AFact() {}
+
 func findSealedInstances(pass *analysis.Pass) (any, error) {
-	log.Printf("START findSealedInstances")
+	log.Printf("START findSealedInstances %v", pass.Pkg.Path())
 	inspect := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
 	sealdedInterfaces := pass.ResultOf[SealedInterfaceFinder].([]*types.Interface)
 
@@ -92,6 +118,18 @@ func findSealedInstances(pass *analysis.Pass) (any, error) {
 		}
 	})
 
+	pass.ExportPackageFact(&SealedInstances{Instances: sealedInstances})
+
+	// add imported sealed instances
+	for _, imp := range pass.Pkg.Imports() {
+		var importedFact SealedInstances
+		if pass.ImportPackageFact(imp, &importedFact) {
+			for iface, instances := range importedFact.Instances {
+				sealedInstances[iface] = append(sealedInstances[iface], instances...)
+			}
+		}
+	}
+
 	return sealedInstances, nil
 }
 
@@ -106,7 +144,7 @@ var Analyzer = &analysis.Analyzer{
 }
 
 func run(pass *analysis.Pass) (any, error) {
-	log.Printf("START run")
+	log.Printf("START run %v", pass.Pkg.Path())
 	inspect := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
 
 	nodeFilter := []ast.Node{
